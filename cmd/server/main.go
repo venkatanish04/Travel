@@ -28,13 +28,20 @@ func main() {
 	}
 	config.Address = "localhost:" + *port
 
-	db, err := storage.OpenDatabase("data/" + config.ID + ".sqlite.db")
+	databaseConfig := storage.MySQLConfigFromEnv()
+	db, err := storage.NewDatabase(
+		databaseConfig.Username,
+		databaseConfig.Password,
+		databaseConfig.Host,
+		databaseConfig.Port,
+		databaseConfig.Database,
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	if err := storage.InitializeSchema(db); err != nil {
+	if err := storage.InitializeMySQLSchema(db); err != nil {
 		log.Fatal(err)
 	}
 	if err := booking.SeedDatabase(db); err != nil {

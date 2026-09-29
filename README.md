@@ -1,16 +1,33 @@
 # TravelRaft
 
-TravelRaft is a Go booking service prototype with a Raft-shaped replicated state core. It supports atomic reservations for trains, buses, and flights through a JSON HTTP API.
+TravelRaft is a Go booking service prototype with gRPC booking and Raft services. It supports trains, buses, flights, seats, bookings, and majority-based Raft log replication.
 
-## Run
+## MySQL setup
+
+Create a MySQL database named `travelraft`, then set these environment variables before starting a node:
+
+```powershell
+$env:MYSQL_USER="root"
+$env:MYSQL_PASSWORD="your-password"
+$env:MYSQL_HOST="127.0.0.1"
+$env:MYSQL_PORT="3306"
+$env:MYSQL_DATABASE="travelraft"
+```
+
+The server creates the required tables on startup. MySQL must be installed and running locally.
+
+## Run and test
 
 ```powershell
 go test ./...
-go run ./cmd/server
-go run ./cmd/client -customer alice -trip train-1 -seat A1
+go vet ./...
+go build ./...
+go run ./cmd/server --id=node1 --port=50051
 ```
 
-The server exposes `GET /health`, `GET /reservations`, `POST /reservations`, and `DELETE /reservations/{id}`. The protobuf files under `api/proto` define the intended wire contracts; the runnable prototype uses JSON HTTP to avoid requiring code generation during setup.
+Start node2 and node3 on ports `50052` and `50053` in separate terminals. The gRPC client connects to node1 with `go run ./cmd/client`.
+
+The production server uses MySQL. The legacy SQLite adapter remains available for offline package tests until MySQL is installed in the development environment.
 
 ## Docker
 
