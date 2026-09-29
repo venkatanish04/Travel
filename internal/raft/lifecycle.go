@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	heartbeatInterval      = 100 * time.Millisecond
-	minimumElectionTimeout = 300 * time.Millisecond
-	maximumElectionTimeout = 500 * time.Millisecond
+	heartbeatInterval  = 500 * time.Millisecond
+	minElectionTimeout = 1500 * time.Millisecond
+	maxElectionTimeout = 3000 * time.Millisecond
 )
 
 func (n *Node) Start(ctx context.Context) {
@@ -19,13 +19,16 @@ func (n *Node) Start(ctx context.Context) {
 	})
 }
 
+func (n *Node) StartElectionLoop() { n.Start(context.Background()) }
+
+func (n *Node) StartLeaderLoop() { n.Start(context.Background()) }
+
 func (n *Node) Stop() {
 	n.stopOnce.Do(func() { close(n.stopCh) })
 }
 
 func (n *Node) electionLoop(ctx context.Context) {
-	random := rand.New(rand.NewSource(time.Now().UnixNano()))
-	timer := time.NewTimer(randomElectionTimeout(random))
+	timer := time.NewTimer(randomElectionTimeout())
 	defer timer.Stop()
 	for {
 		select {
@@ -34,12 +37,12 @@ func (n *Node) electionLoop(ctx context.Context) {
 		case <-n.stopCh:
 			return
 		case <-n.electionReset:
-			resetTimer(timer, randomElectionTimeout(random))
+			resetTimer(timer, randomElectionTimeout())
 		case <-timer.C:
 			if n.GetState() != Leader {
 				n.StartElection()
 			}
-			resetTimer(timer, randomElectionTimeout(random))
+			resetTimer(timer, randomElectionTimeout())
 		}
 	}
 }
@@ -61,8 +64,8 @@ func (n *Node) heartbeatLoop(ctx context.Context) {
 	}
 }
 
-func randomElectionTimeout(random *rand.Rand) time.Duration {
-	return minimumElectionTimeout + time.Duration(random.Int63n(int64(maximumElectionTimeout-minimumElectionTimeout)))
+func randomElectionTimeout() time.Duration {
+	return minElectionTimeout + time.Duration(rand.Int63n(int64(maxElectionTimeout-minElectionTimeout)))
 }
 
 func resetTimer(timer *time.Timer, duration time.Duration) {

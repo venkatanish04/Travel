@@ -18,7 +18,7 @@ func TestSingleNodeStartsElectionAutomatically(t *testing.T) {
 	node.Start(ctx)
 	defer node.Stop()
 
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(5 * time.Second)
 	for node.GetState() != Leader {
 		select {
 		case <-deadline:
@@ -69,7 +69,7 @@ func TestThreeNodeClusterElectsAndReplicates(t *testing.T) {
 	}()
 
 	var leader *Node
-	deadline := time.After(4 * time.Second)
+	deadline := time.After(8 * time.Second)
 	for leader == nil {
 		for _, item := range running {
 			if item.node.GetState() == Leader {

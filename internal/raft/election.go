@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -72,6 +73,7 @@ func (n *Node) StartElection() State {
 		n.state.Role = Leader
 		n.state.LeaderID = n.id
 		n.initializeReplicationLocked()
+		fmt.Printf("\n[%s] became LEADER for term %d\n", n.id, n.CurrentTerm)
 	}
 	return n.state
 }
