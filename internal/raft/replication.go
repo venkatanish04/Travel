@@ -2,11 +2,42 @@ package raft
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	pb "travelraft/api/proto"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-func (n *Node) Replicate(command []byte) (Entry, error) { return n.Apply(command) }
+func (n *Node) Replicate(command []byte) (Entry, error) {
+	if len(command) == 0 {
+		return Entry{}, ErrEmptyCommand
+	}
+	n.mu.Lock()
+	if n.state.Role != Leader {
+		n.mu.Unlock()
+		return Entry{}, ErrNotLeader
+	}
+	entry := n.log.Append(uint64(n.CurrentTerm), command)
+	n.mu.Unlock()
+
+	if len(n.Peers) == 0 {
+		n.mu.Lock()
+		n.CommitIndex = len(n.log.Entries) - 1
+		n.applyCommittedLocked()
+		n.mu.Unlock()
+		return entry, nil
+	}
+	n.broadcastAppendEntries(context.Background())
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.advanceCommitLocked() < int(entry.Index-1) {
+		return entry, ErrReplicationFailed
+	}
+	return entry, nil
+}
 
 func (n *Node) AppendEntries(_ context.Context, req *pb.AppendEntriesRequest) (*pb.AppendEntriesResponse, error) {
 	n.mu.Lock()
@@ -24,8 +55,17 @@ func (n *Node) AppendEntries(_ context.Context, req *pb.AppendEntriesRequest) (*
 			return &pb.AppendEntriesResponse{Term: int32(n.CurrentTerm)}, nil
 		}
 	}
-	for _, entry := range req.GetEntries() {
-		n.log.Append(uint64(entry.GetTerm()), []byte(entry.GetCommand()))
+	insertAt := int(req.GetPrevLogIndex()) + 1
+	for offset, entry := range req.GetEntries() {
+		position := insertAt + offset
+		if position < len(n.log.Entries) {
+			if n.log.Entries[position].Term != uint64(entry.GetTerm()) || string(n.log.Entries[position].Command) != entry.GetCommand() {
+				n.log.Entries = n.log.Entries[:position]
+			}
+		}
+		if position >= len(n.log.Entries) {
+			n.log.Append(uint64(entry.GetTerm()), []byte(entry.GetCommand()))
+		}
 	}
 	if req.GetLeaderCommit() > int32(n.CommitIndex) {
 		lastIndex := len(n.log.Entries) - 1
@@ -35,5 +75,103 @@ func (n *Node) AppendEntries(_ context.Context, req *pb.AppendEntriesRequest) (*
 			n.CommitIndex = lastIndex
 		}
 	}
+	n.applyCommittedLocked()
+	n.signalElectionReset()
 	return &pb.AppendEntriesResponse{Term: int32(n.CurrentTerm), Success: true}, nil
+}
+
+func (n *Node) broadcastAppendEntries(ctx context.Context) {
+	n.mu.RLock()
+	if n.state.Role != Leader {
+		n.mu.RUnlock()
+		return
+	}
+	term := n.CurrentTerm
+	commitIndex := n.CommitIndex
+	peers := make(map[string]string, len(n.Peers))
+	for id, address := range n.Peers {
+		peers[id] = address
+	}
+	n.mu.RUnlock()
+
+	var wait sync.WaitGroup
+	for peerID, address := range peers {
+		wait.Add(1)
+		go func(peerID, address string) {
+			defer wait.Done()
+			request := n.appendRequest(peerID, term, commitIndex)
+			callContext, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+			conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			response, err := pb.NewRaftServiceClient(conn).AppendEntries(callContext, request)
+			if err != nil {
+				return
+			}
+			n.mu.Lock()
+			defer n.mu.Unlock()
+			if response.GetTerm() > int32(n.CurrentTerm) {
+				n.becomeFollowerLocked(int(response.GetTerm()))
+				return
+			}
+			if response.GetSuccess() {
+				n.matchIndex[peerID] = len(n.log.Entries) - 1
+				n.nextIndex[peerID] = len(n.log.Entries)
+			} else if n.nextIndex[peerID] > 0 {
+				n.nextIndex[peerID]--
+			}
+		}(peerID, address)
+	}
+	wait.Wait()
+	n.mu.Lock()
+	n.advanceCommitLocked()
+	n.mu.Unlock()
+}
+
+func (n *Node) advanceCommitLocked() int {
+	lastIndex := len(n.log.Entries) - 1
+	for index := lastIndex; index > n.CommitIndex; index-- {
+		replicated := 1
+		for _, match := range n.matchIndex {
+			if match >= index {
+				replicated++
+			}
+		}
+		if replicated >= (len(n.Peers)+1)/2+1 {
+			n.CommitIndex = index
+			n.applyCommittedLocked()
+			break
+		}
+	}
+	return n.CommitIndex
+}
+
+func (n *Node) appendRequest(peerID string, term, commitIndex int) *pb.AppendEntriesRequest {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	next := n.nextIndex[peerID]
+	request := &pb.AppendEntriesRequest{Term: int32(term), LeaderId: n.id, PrevLogIndex: int32(next - 1), LeaderCommit: int32(commitIndex)}
+	if next > 0 && next <= len(n.log.Entries) {
+		request.PrevLogTerm = int32(n.log.Entries[next-1].Term)
+	}
+	for _, entry := range n.log.Entries[next:] {
+		request.Entries = append(request.Entries, &pb.LogEntry{Term: int32(entry.Term), Command: string(entry.Command)})
+	}
+	return request
+}
+
+func (n *Node) applyCommittedLocked() {
+	for n.LastApplied < n.CommitIndex {
+		position := n.LastApplied + 1
+		if position >= len(n.log.Entries) {
+			return
+		}
+		if n.machine != nil {
+			_ = n.machine.Apply(n.log.Entries[position].Command)
+		}
+		n.LastApplied = position
+	}
 }

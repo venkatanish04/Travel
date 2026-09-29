@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -46,6 +47,8 @@ func main() {
 	}
 
 	node := raft.NewNode(nodeID, listenAddress, config.Peers)
+	node.Start(context.Background())
+	defer node.Stop()
 	grpcServer := grpc.NewServer()
 	pb.RegisterBookingServiceServer(grpcServer, booking.NewGRPCServer(booking.NewDatabaseService(db), db))
 	pb.RegisterRaftServiceServer(grpcServer, raft.NewGRPCServer(node))

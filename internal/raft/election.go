@@ -71,6 +71,7 @@ func (n *Node) StartElection() State {
 	if n.state.Role == Candidate && n.CurrentTerm == term && votes >= majority {
 		n.state.Role = Leader
 		n.state.LeaderID = n.id
+		n.initializeReplicationLocked()
 	}
 	return n.state
 }
@@ -96,6 +97,7 @@ func (n *Node) RequestVote(_ context.Context, req *pb.RequestVoteRequest) (*pb.R
 	n.VotedFor = req.GetCandidateId()
 	n.state.VotedFor = n.VotedFor
 	n.state.Role = Follower
+	n.signalElectionReset()
 	return &pb.RequestVoteResponse{Term: int32(n.CurrentTerm), VoteGranted: true}, nil
 }
 

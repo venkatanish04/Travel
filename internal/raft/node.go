@@ -8,26 +8,36 @@ import (
 type StateMachine interface{ Apply([]byte) error }
 
 type Node struct {
-	mu          sync.RWMutex
-	id          string
-	Address     string
-	Peers       map[string]string
-	state       State
-	log         Log
-	CommitIndex int
-	LastApplied int
-	CurrentTerm int
-	VotedFor    string
-	machine     StateMachine
+	mu            sync.RWMutex
+	id            string
+	Address       string
+	Peers         map[string]string
+	state         State
+	log           Log
+	CommitIndex   int
+	LastApplied   int
+	CurrentTerm   int
+	VotedFor      string
+	machine       StateMachine
+	nextIndex     map[string]int
+	matchIndex    map[string]int
+	electionReset chan struct{}
+	startOnce     sync.Once
+	stopOnce      sync.Once
+	stopCh        chan struct{}
 }
 
 func NewNode(id string, args ...interface{}) *Node {
 	node := &Node{
-		id:          id,
-		Peers:       make(map[string]string),
-		state:       State{Role: Follower},
-		CommitIndex: -1,
-		LastApplied: -1,
+		id:            id,
+		Peers:         make(map[string]string),
+		state:         State{Role: Follower},
+		CommitIndex:   -1,
+		LastApplied:   -1,
+		nextIndex:     make(map[string]int),
+		matchIndex:    make(map[string]int),
+		electionReset: make(chan struct{}, 1),
+		stopCh:        make(chan struct{}),
 	}
 
 	if len(args) == 1 {
@@ -88,6 +98,14 @@ func (n *Node) BecomeLeader() {
 	defer n.mu.Unlock()
 	n.state.Role = Leader
 	n.state.LeaderID = n.id
+	n.initializeReplicationLocked()
+}
+
+func (n *Node) initializeReplicationLocked() {
+	for peerID := range n.Peers {
+		n.nextIndex[peerID] = len(n.log.Entries)
+		n.matchIndex[peerID] = -1
+	}
 }
 
 func (n *Node) PrintStatus() {
