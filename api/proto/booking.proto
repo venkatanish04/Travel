@@ -1,12 +1,78 @@
 syntax = "proto3";
 
-package travelraft.booking;
-option go_package = "travelraft/api/proto";
+package booking;
+
+option go_package = "travelraft/api/proto;proto";
 
 service BookingService {
-  rpc Reserve(ReserveRequest) returns (Reservation);
-  rpc Cancel(CancelRequest) returns (Reservation);
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc GetSeats(GetSeatsRequest) returns (GetSeatsResponse);
+  rpc Book(BookRequest) returns (BookResponse);
+  rpc GetBooking(GetBookingRequest) returns (GetBookingResponse);
+  rpc Cancel(CancelRequest) returns (CancelResponse);
 }
-message ReserveRequest { string customer_id = 1; string trip_id = 2; string seat_id = 3; }
-message CancelRequest { string reservation_id = 1; }
-message Reservation { string id = 1; string customer_id = 2; string trip_id = 3; string seat_id = 4; string status = 5; }
+
+message SearchRequest {
+  string vehicle_type = 1;
+  string source = 2;
+  string destination = 3;
+}
+
+message SearchResponse { repeated Vehicle vehicles = 1; }
+
+message Vehicle {
+  int32 id = 1;
+  string vehicle_type = 2;
+  string vehicle_number = 3;
+  string name = 4;
+  string source = 5;
+  string destination = 6;
+  string departure_time = 7;
+}
+
+message GetSeatsRequest { int32 vehicle_id = 1; }
+message GetSeatsResponse { repeated Seat seats = 1; }
+
+message Seat {
+  int32 id = 1;
+  int32 vehicle_id = 2;
+  string seat_number = 3;
+  string status = 4;
+}
+
+message BookRequest {
+  string passenger_name = 1;
+  string email = 2;
+  int32 vehicle_id = 3;
+  int32 seat_id = 4;
+}
+
+message BookResponse {
+  bool success = 1;
+  string pnr = 2;
+  string message = 3;
+}
+
+message GetBookingRequest { string pnr = 1; }
+
+message GetBookingResponse {
+  bool found = 1;
+  Booking booking = 2;
+  string message = 3;
+}
+
+message Booking {
+  int32 id = 1;
+  string pnr = 2;
+  int32 user_id = 3;
+  int32 vehicle_id = 4;
+  int32 seat_id = 5;
+  string passenger_name = 6;
+  string status = 7;
+  string vehicle_name = 8;
+  string vehicle_number = 9;
+  string seat_number = 10;
+}
+
+message CancelRequest { string pnr = 1; }
+message CancelResponse { bool success = 1; string message = 2; }
