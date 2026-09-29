@@ -140,6 +140,12 @@ func (n *Node) appendRequest(peerID string, term, commitIndex int) *pb.AppendEnt
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	next := n.NextIndex[peerID]
+	if next < 0 {
+		next = 0
+	}
+	if next > len(n.log.Entries) {
+		next = len(n.log.Entries)
+	}
 	request := &pb.AppendEntriesRequest{Term: int32(term), LeaderId: n.id, PrevLogIndex: int32(next - 1), LeaderCommit: int32(commitIndex)}
 	if next > 0 && next <= len(n.log.Entries) {
 		request.PrevLogTerm = int32(n.log.Entries[next-1].Term)

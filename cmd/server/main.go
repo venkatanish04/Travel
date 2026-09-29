@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	pb "travelraft/api/proto"
 	"travelraft/internal/booking"
 	"travelraft/internal/raft"
+	"travelraft/internal/state"
 	"travelraft/internal/storage"
 
 	"google.golang.org/grpc"
@@ -49,11 +51,13 @@ func main() {
 	}
 
 	node := raft.NewNode(config.ID, config.Address, config.Peers)
+	node.SetStateMachine(state.NewMySQLMachine(storage.NewBookingStore(db)))
 	node.StartElectionLoop()
 	node.StartLeaderLoop()
+	node.StartApplyLoop(context.Background())
 	defer node.Stop()
 	grpcServer := grpc.NewServer()
-	pb.RegisterBookingServiceServer(grpcServer, booking.NewGRPCServer(booking.NewDatabaseService(db), db))
+	pb.RegisterBookingServiceServer(grpcServer, booking.NewGRPCServer(booking.NewDatabaseService(db), db, node))
 	pb.RegisterRaftServiceServer(grpcServer, raft.NewGRPCServer(node))
 	listener, err := net.Listen("tcp", config.Address)
 	if err != nil {

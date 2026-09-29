@@ -38,11 +38,15 @@ func (s *DatabaseService) RegisterUser(name, email string) (int64, error) {
 }
 
 func (s *DatabaseService) Book(userID, vehicleID, seatID int, passengerName string) (string, error) {
-	pnr := fmt.Sprintf("TRF%d%02d", time.Now().UnixNano()%1000000000, atomic.AddUint64(&s.sequence, 1)%100)
+	pnr := s.NewPNR()
 	if err := storage.CreateBooking(s.DB, pnr, userID, vehicleID, seatID, passengerName); err != nil {
 		return "", err
 	}
 	return pnr, nil
+}
+
+func (s *DatabaseService) NewPNR() string {
+	return fmt.Sprintf("TRF%d%02d", time.Now().UnixNano()%1000000000, atomic.AddUint64(&s.sequence, 1)%100)
 }
 
 func (s *DatabaseService) GetBooking(pnr string) (*storage.Booking, error) {

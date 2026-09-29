@@ -41,6 +41,18 @@ type Booking struct {
 	SeatNumber    string
 }
 
+type BookingStore struct{ DB *sql.DB }
+
+func NewBookingStore(db *sql.DB) *BookingStore { return &BookingStore{DB: db} }
+
+func (s *BookingStore) ApplyBooking(pnr string, userID, vehicleID, seatID int, passengerName string) error {
+	return ApplyBooking(s.DB, pnr, userID, vehicleID, seatID, passengerName)
+}
+
+func (s *BookingStore) ApplyCancellation(pnr string) error {
+	return ApplyCancellation(s.DB, pnr)
+}
+
 func AddUser(db *sql.DB, name, email string) (int64, error) {
 	result, err := db.Exec(`INSERT INTO users (name, email) VALUES (?, ?)`, name, email)
 	if err != nil {
@@ -149,6 +161,14 @@ func CreateBooking(db *sql.DB, pnr string, userID, vehicleID, seatID int, passen
 		return err
 	}
 	return tx.Commit()
+}
+
+func ApplyBooking(db *sql.DB, pnr string, userID, vehicleID, seatID int, passengerName string) error {
+	return CreateBooking(db, pnr, userID, vehicleID, seatID, passengerName)
+}
+
+func ApplyCancellation(db *sql.DB, pnr string) error {
+	return CancelBooking(db, pnr)
 }
 
 func GetBookingByPNR(db *sql.DB, pnr string) (*Booking, error) {

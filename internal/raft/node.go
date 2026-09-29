@@ -55,6 +55,12 @@ func NewNode(id string, args ...interface{}) *Node {
 
 func (n *Node) ID() string { return n.id }
 
+func (n *Node) SetStateMachine(machine StateMachine) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.machine = machine
+}
+
 func (n *Node) State() State { n.mu.RLock(); defer n.mu.RUnlock(); return n.state }
 
 func (n *Node) GetState() Role { return n.State().Role }
@@ -156,4 +162,10 @@ func (n *Node) AddCommand(command string) bool {
 	n.MatchIndex[n.id] = n.log.LastIndex()
 	n.NextIndex[n.id] = n.log.LastIndex() + 1
 	return true
+}
+
+func (n *Node) ApplyCommittedEntries() {
+	n.mu.Lock()
+	n.applyCommittedLocked()
+	n.mu.Unlock()
 }

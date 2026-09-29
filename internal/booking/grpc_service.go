@@ -5,6 +5,8 @@ import (
 	"database/sql"
 
 	pb "travelraft/api/proto"
+	"travelraft/internal/raft"
+	"travelraft/internal/state"
 	"travelraft/internal/storage"
 
 	"google.golang.org/grpc/codes"
@@ -16,10 +18,15 @@ type GRPCServer struct {
 
 	Service *DatabaseService
 	DB      *sql.DB
+	Raft    *raft.Node
 }
 
-func NewGRPCServer(service *DatabaseService, db *sql.DB) *GRPCServer {
-	return &GRPCServer{Service: service, DB: db}
+func NewGRPCServer(service *DatabaseService, db *sql.DB, nodes ...*raft.Node) *GRPCServer {
+	server := &GRPCServer{Service: service, DB: db}
+	if len(nodes) > 0 {
+		server.Raft = nodes[0]
+	}
+	return server
 }
 
 func (s *GRPCServer) Search(_ context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
@@ -80,6 +87,24 @@ func (s *GRPCServer) Book(_ context.Context, req *pb.BookRequest) (*pb.BookRespo
 	if err != nil {
 		return &pb.BookResponse{Message: err.Error()}, nil
 	}
+	if s.Raft != nil {
+		if !s.Raft.IsLeader() {
+			return &pb.BookResponse{Message: "NOT_LEADER: " + s.Raft.LeaderID()}, nil
+		}
+		command, err := state.EncodeBookingCommand(state.BookingCommand{
+			Type: state.CommandBook, PNR: s.Service.NewPNR(), UserID: int(userID),
+			VehicleID: int(req.GetVehicleId()), SeatID: int(req.GetSeatId()), PassengerName: req.GetPassengerName(),
+		})
+		if err != nil {
+			return &pb.BookResponse{Message: err.Error()}, nil
+		}
+		if _, err := s.Raft.Replicate(command); err != nil {
+			return &pb.BookResponse{Message: err.Error()}, nil
+		}
+		decoded, _ := state.DecodeBookingCommand(command)
+		return &pb.BookResponse{Success: true, Pnr: decoded.PNR, Message: "booking confirmed"}, nil
+	}
+
 	pnr, err := s.Service.Book(int(userID), int(req.GetVehicleId()), int(req.GetSeatId()), req.GetPassengerName())
 	if err != nil {
 		return &pb.BookResponse{Message: err.Error()}, nil
@@ -115,6 +140,19 @@ func (s *GRPCServer) GetBooking(_ context.Context, req *pb.GetBookingRequest) (*
 func (s *GRPCServer) Cancel(_ context.Context, req *pb.CancelRequest) (*pb.CancelResponse, error) {
 	if req.GetPnr() == "" {
 		return nil, status.Error(codes.InvalidArgument, "pnr is required")
+	}
+	if s.Raft != nil {
+		if !s.Raft.IsLeader() {
+			return &pb.CancelResponse{Message: "NOT_LEADER: " + s.Raft.LeaderID()}, nil
+		}
+		command, err := state.EncodeBookingCommand(state.BookingCommand{Type: state.CommandCancel, PNR: req.GetPnr()})
+		if err != nil {
+			return &pb.CancelResponse{Message: err.Error()}, nil
+		}
+		if _, err := s.Raft.Replicate(command); err != nil {
+			return &pb.CancelResponse{Message: err.Error()}, nil
+		}
+		return &pb.CancelResponse{Success: true, Message: "booking cancelled successfully"}, nil
 	}
 	if err := s.Service.Cancel(req.GetPnr()); err != nil {
 		return &pb.CancelResponse{Message: err.Error()}, nil
