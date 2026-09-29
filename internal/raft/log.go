@@ -36,7 +36,16 @@ func (l *Log) LastIndex() int {
 
 func (l *Log) LastTerm() int {
 	if len(l.Entries) == 0 {
-		return 0
+		return -1
 	}
 	return int(l.Entries[len(l.Entries)-1].Term)
+}
+
+func (l *Log) Get(index int) Entry { return l.Entries[index] }
+
+func (l *Log) DeleteFrom(index int) {
+	if index < 0 || index >= len(l.Entries) {
+		return
+	}
+	l.Entries = l.Entries[:index]
 }

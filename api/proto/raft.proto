@@ -33,6 +33,7 @@ message AppendEntriesRequest {
 message AppendEntriesResponse {
 	int32 term = 1;
 	bool success = 2;
+	int32 match_index = 3;
 }
 
 message LogEntry {

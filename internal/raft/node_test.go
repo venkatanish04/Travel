@@ -33,4 +33,21 @@ func TestRequestVoteAndAppendEntries(t *testing.T) {
 	if len(node.Entries()) != 1 || node.State().LeaderID != "node1" {
 		t.Fatalf("node did not append leader entry: entries=%d state=%#v", len(node.Entries()), node.State())
 	}
+	if appendResponse.GetMatchIndex() != 0 {
+		t.Fatalf("match index = %d, want 0", appendResponse.GetMatchIndex())
+	}
+}
+
+func TestAddCommandOnlyAppendsOnLeader(t *testing.T) {
+	node := NewNode("node1", "localhost:50051", map[string]string{})
+	if node.AddCommand("BOOK|TR101|A1|user123") {
+		t.Fatal("follower accepted a command")
+	}
+	node.BecomeLeader()
+	if !node.AddCommand("BOOK|TR101|A1|user123") {
+		t.Fatal("leader rejected a command")
+	}
+	if len(node.Entries()) != 1 || node.NextIndex[node.ID()] != 1 {
+		t.Fatalf("log/index state = %d/%d, want 1/1", len(node.Entries()), node.NextIndex[node.ID()])
+	}
 }

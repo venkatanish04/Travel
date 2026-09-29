@@ -19,8 +19,8 @@ type Node struct {
 	CurrentTerm   int
 	VotedFor      string
 	machine       StateMachine
-	nextIndex     map[string]int
-	matchIndex    map[string]int
+	NextIndex     map[string]int
+	MatchIndex    map[string]int
 	electionReset chan struct{}
 	startOnce     sync.Once
 	stopOnce      sync.Once
@@ -34,8 +34,8 @@ func NewNode(id string, args ...interface{}) *Node {
 		state:         State{Role: Follower},
 		CommitIndex:   -1,
 		LastApplied:   -1,
-		nextIndex:     make(map[string]int),
-		matchIndex:    make(map[string]int),
+		NextIndex:     make(map[string]int),
+		MatchIndex:    make(map[string]int),
 		electionReset: make(chan struct{}, 1),
 		stopCh:        make(chan struct{}),
 	}
@@ -103,8 +103,8 @@ func (n *Node) BecomeLeader() {
 
 func (n *Node) initializeReplicationLocked() {
 	for peerID := range n.Peers {
-		n.nextIndex[peerID] = len(n.log.Entries)
-		n.matchIndex[peerID] = -1
+		n.NextIndex[peerID] = len(n.log.Entries)
+		n.MatchIndex[peerID] = -1
 	}
 }
 
@@ -141,4 +141,19 @@ func (n *Node) Apply(command []byte) (Entry, error) {
 	n.CommitIndex = int(entry.Index)
 	n.LastApplied = n.CommitIndex
 	return entry, nil
+}
+
+func (n *Node) AddCommand(command string) bool {
+	if command == "" {
+		return false
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.state.Role != Leader {
+		return false
+	}
+	n.log.Append(uint64(n.CurrentTerm), []byte(command))
+	n.MatchIndex[n.id] = n.log.LastIndex()
+	n.NextIndex[n.id] = n.log.LastIndex() + 1
+	return true
 }

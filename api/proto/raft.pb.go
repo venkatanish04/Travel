@@ -229,6 +229,7 @@ type AppendEntriesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Term          int32                  `protobuf:"varint,1,opt,name=term,proto3" json:"term,omitempty"`
 	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	MatchIndex    int32                  `protobuf:"varint,3,opt,name=match_index,json=matchIndex,proto3" json:"match_index,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -275,6 +276,13 @@ func (x *AppendEntriesResponse) GetSuccess() bool {
 		return x.Success
 	}
 	return false
+}
+
+func (x *AppendEntriesResponse) GetMatchIndex() int32 {
+	if x != nil {
+		return x.MatchIndex
+	}
+	return 0
 }
 
 type LogEntry struct {
@@ -348,10 +356,12 @@ const file_api_proto_raft_proto_rawDesc = "" +
 	"\x0eprev_log_index\x18\x03 \x01(\x05R\fprevLogIndex\x12\"\n" +
 	"\rprev_log_term\x18\x04 \x01(\x05R\vprevLogTerm\x12(\n" +
 	"\aentries\x18\x05 \x03(\v2\x0e.raft.LogEntryR\aentries\x12#\n" +
-	"\rleader_commit\x18\x06 \x01(\x05R\fleaderCommit\"E\n" +
+	"\rleader_commit\x18\x06 \x01(\x05R\fleaderCommit\"f\n" +
 	"\x15AppendEntriesResponse\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x05R\x04term\x12\x18\n" +
-	"\asuccess\x18\x02 \x01(\bR\asuccess\"8\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x1f\n" +
+	"\vmatch_index\x18\x03 \x01(\x05R\n" +
+	"matchIndex\"8\n" +
 	"\bLogEntry\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x05R\x04term\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand2\x9b\x01\n" +
