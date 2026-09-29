@@ -10,6 +10,8 @@ const (
 	Leader    Role = "leader"
 )
 
+func (r Role) String() string { return string(r) }
+
 var ErrNotLeader = errors.New("raft node is not the leader")
 var ErrEmptyCommand = errors.New("raft command is empty")
 

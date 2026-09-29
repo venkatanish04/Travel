@@ -6,18 +6,37 @@ type Entry struct {
 	Command []byte `json:"command"`
 }
 
+type LogEntry = Entry
+
 type Log struct {
-	entries []Entry
+	Entries []Entry
 }
 
-func (l *Log) Append(term uint64, command []byte) Entry {
-	entry := Entry{Index: uint64(len(l.entries) + 1), Term: term, Command: append([]byte(nil), command...)}
-	l.entries = append(l.entries, entry)
+func NewRaftLog() *Log { return &Log{Entries: make([]Entry, 0)} }
+
+func (l *Log) Append(args ...interface{}) Entry {
+	var term uint64
+	var command []byte
+	if len(args) == 1 {
+		entry := args[0].(Entry)
+		term = entry.Term
+		command = append([]byte(nil), entry.Command...)
+	} else {
+		term = args[0].(uint64)
+		command = append([]byte(nil), args[1].([]byte)...)
+	}
+	entry := Entry{Index: uint64(len(l.Entries) + 1), Term: term, Command: command}
+	l.Entries = append(l.Entries, entry)
 	return entry
 }
 
-func (l *Log) Entries() []Entry {
-	result := make([]Entry, len(l.entries))
-	copy(result, l.entries)
-	return result
+func (l *Log) LastIndex() int {
+	return len(l.Entries) - 1
+}
+
+func (l *Log) LastTerm() int {
+	if len(l.Entries) == 0 {
+		return 0
+	}
+	return int(l.Entries[len(l.Entries)-1].Term)
 }
