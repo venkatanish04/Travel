@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package travelraft.booking;
+option go_package = "travelraft/api/proto";
+
+service BookingService {
+  rpc Reserve(ReserveRequest) returns (Reservation);
+  rpc Cancel(CancelRequest) returns (Reservation);
+}
+message ReserveRequest { string customer_id = 1; string trip_id = 2; string seat_id = 3; }
+message CancelRequest { string reservation_id = 1; }
+message Reservation { string id = 1; string customer_id = 2; string trip_id = 3; string seat_id = 4; string status = 5; }

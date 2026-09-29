@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: travelraft-node3
+  namespace: travelraft
+spec:
+  selector:
+    app: travelraft
+    node: node3
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
