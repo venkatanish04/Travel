@@ -3,6 +3,8 @@ package booking
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"time"
 
 	pb "travelraft/api/proto"
 	"travelraft/internal/raft"
@@ -13,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type GRPCServer struct {
+type GRPCService struct {
 	pb.UnimplementedBookingServiceServer
 
 	Service *DatabaseService
@@ -21,15 +23,22 @@ type GRPCServer struct {
 	Raft    *raft.Node
 }
 
-func NewGRPCServer(service *DatabaseService, db *sql.DB, nodes ...*raft.Node) *GRPCServer {
-	server := &GRPCServer{Service: service, DB: db}
+// GRPCServer is kept as a compatibility alias for the older call sites in this repo.
+type GRPCServer = GRPCService
+
+func NewGRPCServer(service *DatabaseService, db *sql.DB, nodes ...*raft.Node) *GRPCService {
+	server := &GRPCService{Service: service, DB: db}
 	if len(nodes) > 0 {
 		server.Raft = nodes[0]
 	}
 	return server
 }
 
-func (s *GRPCServer) Search(_ context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
+func NewGRPCService(service *DatabaseService, db *sql.DB, nodes ...*raft.Node) *GRPCService {
+	return NewGRPCServer(service, db, nodes...)
+}
+
+func (s *GRPCService) Search(_ context.Context, req *pb.SearchRequest) (*pb.SearchResponse, error) {
 	if req.GetVehicleType() == "" {
 		return nil, status.Error(codes.InvalidArgument, "vehicle type is required")
 	}
@@ -52,7 +61,7 @@ func (s *GRPCServer) Search(_ context.Context, req *pb.SearchRequest) (*pb.Searc
 	return response, nil
 }
 
-func (s *GRPCServer) GetSeats(_ context.Context, req *pb.GetSeatsRequest) (*pb.GetSeatsResponse, error) {
+func (s *GRPCService) GetSeats(_ context.Context, req *pb.GetSeatsRequest) (*pb.GetSeatsResponse, error) {
 	if req.GetVehicleId() <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "vehicle id is required")
 	}
@@ -72,7 +81,7 @@ func (s *GRPCServer) GetSeats(_ context.Context, req *pb.GetSeatsRequest) (*pb.G
 	return response, nil
 }
 
-func (s *GRPCServer) Book(_ context.Context, req *pb.BookRequest) (*pb.BookResponse, error) {
+func (s *GRPCService) Book(_ context.Context, req *pb.BookRequest) (*pb.BookResponse, error) {
 	if req.GetPassengerName() == "" {
 		return nil, status.Error(codes.InvalidArgument, "passenger name is required")
 	}
@@ -87,22 +96,56 @@ func (s *GRPCServer) Book(_ context.Context, req *pb.BookRequest) (*pb.BookRespo
 	if err != nil {
 		return &pb.BookResponse{Message: err.Error()}, nil
 	}
+
 	if s.Raft != nil {
 		if !s.Raft.IsLeader() {
-			return &pb.BookResponse{Message: "NOT_LEADER: " + s.Raft.LeaderID()}, nil
+			return &pb.BookResponse{Success: false, Message: "NOT_LEADER"}, nil
 		}
-		command, err := state.EncodeBookingCommand(state.BookingCommand{
-			Type: state.CommandBook, PNR: s.Service.NewPNR(), UserID: int(userID),
-			VehicleID: int(req.GetVehicleId()), SeatID: int(req.GetSeatId()), PassengerName: req.GetPassengerName(),
-		})
+		seats, err := s.Service.Seats(int(req.GetVehicleId()))
 		if err != nil {
-			return &pb.BookResponse{Message: err.Error()}, nil
+			return nil, status.Error(codes.Internal, err.Error())
 		}
-		if _, err := s.Raft.Replicate(command); err != nil {
-			return &pb.BookResponse{Message: err.Error()}, nil
+		seatAvailable := false
+		for _, seat := range seats {
+			if seat.ID == int(req.GetSeatId()) {
+				seatAvailable = seat.Status == "AVAILABLE"
+				break
+			}
 		}
-		decoded, _ := state.DecodeBookingCommand(command)
-		return &pb.BookResponse{Success: true, Pnr: decoded.PNR, Message: "booking confirmed"}, nil
+		if !seatAvailable {
+			return &pb.BookResponse{Success: false, Message: "seat is already booked or does not belong to vehicle"}, nil
+		}
+
+		pnr := s.Service.NewPNR()
+		command := state.BookingCommand{
+			Type:          state.CommandBook,
+			PNR:           pnr,
+			UserID:        int(userID),
+			VehicleID:     int(req.GetVehicleId()),
+			SeatID:        int(req.GetSeatId()),
+			PassengerName: req.GetPassengerName(),
+		}
+		commandString, err := state.EncodeBookingCommand(command)
+		if err != nil {
+			return nil, err
+		}
+
+		accepted, index, err := s.Raft.ProposeCommand(string(commandString))
+		if err != nil {
+			return nil, err
+		}
+		if !accepted {
+			return &pb.BookResponse{Success: false, Message: "NOT_LEADER"}, nil
+		}
+
+		s.Raft.ReplicateNow()
+		if !s.Raft.WaitForCommit(index, 5*time.Second) {
+			return &pb.BookResponse{Success: false, Message: "BOOKING_COMMIT_TIMEOUT"}, nil
+		}
+		if !s.Raft.WaitForApply(index, 5*time.Second) {
+			return &pb.BookResponse{Success: false, Message: "BOOKING_APPLY_TIMEOUT"}, nil
+		}
+		return &pb.BookResponse{Success: true, Pnr: pnr, Message: fmt.Sprintf("Booking confirmed. PNR: %s", pnr)}, nil
 	}
 
 	pnr, err := s.Service.Book(int(userID), int(req.GetVehicleId()), int(req.GetSeatId()), req.GetPassengerName())
@@ -112,7 +155,7 @@ func (s *GRPCServer) Book(_ context.Context, req *pb.BookRequest) (*pb.BookRespo
 	return &pb.BookResponse{Success: true, Pnr: pnr, Message: "booking confirmed"}, nil
 }
 
-func (s *GRPCServer) GetBooking(_ context.Context, req *pb.GetBookingRequest) (*pb.GetBookingResponse, error) {
+func (s *GRPCService) GetBooking(_ context.Context, req *pb.GetBookingRequest) (*pb.GetBookingResponse, error) {
 	if req.GetPnr() == "" {
 		return nil, status.Error(codes.InvalidArgument, "pnr is required")
 	}
@@ -137,20 +180,31 @@ func (s *GRPCServer) GetBooking(_ context.Context, req *pb.GetBookingRequest) (*
 	}, nil
 }
 
-func (s *GRPCServer) Cancel(_ context.Context, req *pb.CancelRequest) (*pb.CancelResponse, error) {
+func (s *GRPCService) Cancel(_ context.Context, req *pb.CancelRequest) (*pb.CancelResponse, error) {
 	if req.GetPnr() == "" {
 		return nil, status.Error(codes.InvalidArgument, "pnr is required")
 	}
 	if s.Raft != nil {
 		if !s.Raft.IsLeader() {
-			return &pb.CancelResponse{Message: "NOT_LEADER: " + s.Raft.LeaderID()}, nil
+			return &pb.CancelResponse{Success: false, Message: "NOT_LEADER"}, nil
 		}
 		command, err := state.EncodeBookingCommand(state.BookingCommand{Type: state.CommandCancel, PNR: req.GetPnr()})
 		if err != nil {
 			return &pb.CancelResponse{Message: err.Error()}, nil
 		}
-		if _, err := s.Raft.Replicate(command); err != nil {
+		accepted, index, err := s.Raft.ProposeCommand(string(command))
+		if err != nil {
 			return &pb.CancelResponse{Message: err.Error()}, nil
+		}
+		if !accepted {
+			return &pb.CancelResponse{Success: false, Message: "NOT_LEADER"}, nil
+		}
+		s.Raft.ReplicateNow()
+		if !s.Raft.WaitForCommit(index, 5*time.Second) {
+			return &pb.CancelResponse{Success: false, Message: "BOOKING_COMMIT_TIMEOUT"}, nil
+		}
+		if !s.Raft.WaitForApply(index, 5*time.Second) {
+			return &pb.CancelResponse{Success: false, Message: "BOOKING_APPLY_TIMEOUT"}, nil
 		}
 		return &pb.CancelResponse{Success: true, Message: "booking cancelled successfully"}, nil
 	}

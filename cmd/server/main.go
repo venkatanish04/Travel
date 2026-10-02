@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 
 	pb "travelraft/api/proto"
+	"travelraft/config"
 	"travelraft/internal/booking"
 	"travelraft/internal/raft"
 	"travelraft/internal/state"
@@ -24,19 +26,26 @@ func main() {
 	nodeID := flag.String("id", "node1", "Raft node ID")
 	port := flag.String("port", "50051", "gRPC port")
 	flag.Parse()
-	config, ok := raft.DefaultConfigs()[*nodeID]
+	configMap := raft.ConfigsForEnvironment(os.Getenv("TRAVELRAFT_ENV"))
+	nodeConfig, ok := configMap[*nodeID]
 	if !ok {
 		log.Fatalf("unknown node ID %q", *nodeID)
 	}
-	config.Address = "localhost:" + *port
+	listenAddress := ":" + *port
+	environment := os.Getenv("TRAVELRAFT_ENV")
+	if environment == "" || environment == "local" {
+		nodeConfig.Address = "localhost:" + *port
+	} else if environment == "docker" {
+		nodeConfig.Address = nodeConfig.ID + ":" + *port
+	}
 
-	databaseConfig := storage.MySQLConfigFromEnv()
+	databaseConfig := config.LoadDatabaseConfig()
 	db, err := storage.NewDatabase(
-		databaseConfig.Username,
+		databaseConfig.User,
 		databaseConfig.Password,
 		databaseConfig.Host,
 		databaseConfig.Port,
-		databaseConfig.Database,
+		databaseConfig.Name,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -50,7 +59,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	node := raft.NewNode(config.ID, config.Address, config.Peers)
+	node := raft.NewNode(nodeConfig.ID, nodeConfig.Address, nodeConfig.Peers)
 	node.SetStateMachine(state.NewMySQLMachine(storage.NewBookingStore(db)))
 	node.StartElectionLoop()
 	node.StartLeaderLoop()
@@ -59,7 +68,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	pb.RegisterBookingServiceServer(grpcServer, booking.NewGRPCServer(booking.NewDatabaseService(db), db, node))
 	pb.RegisterRaftServiceServer(grpcServer, raft.NewGRPCServer(node))
-	listener, err := net.Listen("tcp", config.Address)
+	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -69,8 +78,8 @@ func main() {
 	fmt.Println("Database: CONNECTED")
 	fmt.Println("Travel Data: READY")
 	fmt.Println("gRPC Server: LISTENING")
-	fmt.Println("Node:", config.ID)
-	fmt.Println("Address:", config.Address)
+	fmt.Println("Node:", nodeConfig.ID)
+	fmt.Println("Address:", nodeConfig.Address)
 	fmt.Println()
 	fmt.Println("Server Status: RUNNING")
 

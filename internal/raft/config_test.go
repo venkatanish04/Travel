@@ -14,3 +14,16 @@ func TestDefaultConfigs(t *testing.T) {
 		t.Fatalf("expected 2 peers, got %d", len(configs["node1"].Peers))
 	}
 }
+
+func TestKubernetesConfigsUseServiceDNS(t *testing.T) {
+	configs := KubernetesConfigs()
+	if configs["node1"].Address != "node1:50051" {
+		t.Fatalf("unexpected node1 Kubernetes address: %s", configs["node1"].Address)
+	}
+	if configs["node1"].Peers["node2"] != "node2:50052" || configs["node1"].Peers["node3"] != "node3:50053" {
+		t.Fatalf("unexpected Kubernetes peers: %#v", configs["node1"].Peers)
+	}
+	if got := ConfigsForEnvironment("kubernetes")["node2"].Address; got != "node2:50052" {
+		t.Fatalf("environment selection returned %q", got)
+	}
+}

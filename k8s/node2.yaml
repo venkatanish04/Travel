@@ -18,18 +18,30 @@ spec:
       containers:
         - name: server
           image: travelraft:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
+          command: ["./travelraft-server"]
+          args: ["--id=node2", "--port=50052"]
           ports:
-            - containerPort: 8080
+            - containerPort: 50052
           env:
+            - name: TRAVELRAFT_ENV
+              value: kubernetes
+            - name: MYSQL_USER
+              value: root
+            - name: MYSQL_PASSWORD
+              value: root
+            - name: MYSQL_HOST
+              value: mysql
+            - name: MYSQL_PORT
+              value: "3306"
+            - name: MYSQL_DATABASE
+              value: travelraft
             - name: NODE_ID
               value: node2
             - name: PORT
-              value: "8080"
-          volumeMounts:
-            - name: data
-              mountPath: /data
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: travelraft-data
+              value: "50052"
+          readinessProbe:
+            tcpSocket:
+              port: 50052
+            initialDelaySeconds: 5
+            periodSeconds: 5

@@ -32,7 +32,7 @@ func NewDatabase(username, password, host, port, database string) (*sql.DB, erro
 func MySQLConfigFromEnv() MySQLConfig {
 	return MySQLConfig{
 		Username: envOrDefault("MYSQL_USER", "root"),
-		Password: os.Getenv("MYSQL_PASSWORD"),
+		Password: envOrDefault("MYSQL_PASSWORD", "root"),
 		Host:     envOrDefault("MYSQL_HOST", "127.0.0.1"),
 		Port:     envOrDefault("MYSQL_PORT", "3306"),
 		Database: envOrDefault("MYSQL_DATABASE", "travelraft"),

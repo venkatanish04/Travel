@@ -2,7 +2,9 @@ package raft
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	pb "travelraft/api/proto"
 )
@@ -49,5 +51,52 @@ func TestAddCommandOnlyAppendsOnLeader(t *testing.T) {
 	}
 	if len(node.Entries()) != 1 || node.NextIndex[node.ID()] != 1 {
 		t.Fatalf("log/index state = %d/%d, want 1/1", len(node.Entries()), node.NextIndex[node.ID()])
+	}
+}
+
+type failingStateMachine struct{}
+
+func (f *failingStateMachine) Apply(_ []byte) error {
+	return errors.New("rejected")
+}
+
+func TestApplyRevertsInvalidCommands(t *testing.T) {
+	node := NewNode("node1")
+	node.BecomeLeader()
+	node.SetStateMachine(&failingStateMachine{})
+
+	if _, err := node.Apply([]byte("INVALID_COMMAND")); err == nil {
+		t.Fatal("expected invalid command to fail")
+	}
+	if len(node.Entries()) != 0 {
+		t.Fatalf("invalid command left a log entry behind: %d entries", len(node.Entries()))
+	}
+	if node.CommitIndex != -1 || node.LastApplied != -1 {
+		t.Fatalf("invalid command changed commit state: commit=%d applied=%d", node.CommitIndex, node.LastApplied)
+	}
+}
+
+type recordingStateMachine struct {
+	commands [][]byte
+}
+
+func (m *recordingStateMachine) Apply(command []byte) error {
+	m.commands = append(m.commands, append([]byte(nil), command...))
+	return nil
+}
+
+func TestProposeCommandAppliesAfterSingleNodeCommit(t *testing.T) {
+	machine := &recordingStateMachine{}
+	node := NewNode("node1", machine)
+
+	accepted, index, err := node.ProposeCommand("BOOK")
+	if err != nil || !accepted {
+		t.Fatalf("proposal accepted=%v err=%v", accepted, err)
+	}
+	if !node.WaitForApply(index, time.Second) {
+		t.Fatal("proposal was not applied")
+	}
+	if len(machine.commands) != 1 || string(machine.commands[0]) != "BOOK" {
+		t.Fatalf("applied commands = %q, want BOOK", machine.commands)
 	}
 }

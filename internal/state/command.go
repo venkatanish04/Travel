@@ -22,8 +22,31 @@ func EncodeBookingCommand(command BookingCommand) ([]byte, error) {
 	return json.Marshal(command)
 }
 
+func EncodeCommand(command interface{}) ([]byte, error) {
+	switch typed := command.(type) {
+	case BookingCommand:
+		return EncodeBookingCommand(typed)
+	case Command:
+		return json.Marshal(typed)
+	default:
+		return json.Marshal(command)
+	}
+}
+
 func DecodeBookingCommand(data []byte) (BookingCommand, error) {
 	var command BookingCommand
 	err := json.Unmarshal(data, &command)
 	return command, err
+}
+
+func DecodeCommand(data []byte) (interface{}, error) {
+	var booking BookingCommand
+	if err := json.Unmarshal(data, &booking); err == nil && (booking.Type == CommandBook || booking.Type == CommandCancel || booking.PNR != "" || booking.UserID != 0 || booking.VehicleID != 0 || booking.SeatID != 0 || booking.PassengerName != "") {
+		return booking, nil
+	}
+	var legacy Command
+	if err := json.Unmarshal(data, &legacy); err == nil {
+		return legacy, nil
+	}
+	return nil, json.Unmarshal(data, &struct{}{})
 }

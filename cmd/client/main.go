@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"time"
@@ -12,10 +13,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-const serverAddress = "localhost:50051"
-
 func main() {
-	conn, err := grpc.NewClient(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	serverAddress := flag.String("address", "localhost:50051", "TravelRaft gRPC server address")
+	flag.Parse()
+
+	conn, err := grpc.NewClient(*serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal("connection error:", err)
 	}

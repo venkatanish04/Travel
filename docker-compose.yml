@@ -1,0 +1,92 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: travelraft-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: travelraft
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - travelraft
+
+  node1:
+    image: travelraft:latest
+    container_name: travelraft-node1
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      TRAVELRAFT_ENV: docker
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: travelraft
+    command:
+      - "./travelraft-server"
+      - "--id=node1"
+      - "--port=50051"
+    ports:
+      - "50051:50051"
+    networks:
+      - travelraft
+
+  node2:
+    image: travelraft:latest
+    container_name: travelraft-node2
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      TRAVELRAFT_ENV: docker
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: travelraft
+    command:
+      - "./travelraft-server"
+      - "--id=node2"
+      - "--port=50052"
+    ports:
+      - "50052:50052"
+    networks:
+      - travelraft
+
+  node3:
+    image: travelraft:latest
+    container_name: travelraft-node3
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      TRAVELRAFT_ENV: docker
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_HOST: mysql
+      MYSQL_PORT: "3306"
+      MYSQL_DATABASE: travelraft
+    command:
+      - "./travelraft-server"
+      - "--id=node3"
+      - "--port=50053"
+    ports:
+      - "50053:50053"
+    networks:
+      - travelraft
+
+volumes:
+  mysql_data:
+
+networks:
+  travelraft:
+    driver: bridge

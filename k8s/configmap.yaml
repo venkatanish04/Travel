@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: travelraft-config
+  namespace: travelraft
+data:
+  TRAVELRAFT_ENV: kubernetes
+  MYSQL_USER: root
+  MYSQL_PASSWORD: root
+  MYSQL_DATABASE: travelraft
+  MYSQL_PORT: "3306"

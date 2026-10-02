@@ -16,7 +16,7 @@
 .vscode/
 .idea/
 
-# SQLite
+# Local database artifacts
 *.db
 *.db-shm
 *.db-wal

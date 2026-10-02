@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"context"
 	"fmt"
 	"sync"
 )
@@ -141,6 +142,9 @@ func (n *Node) Apply(command []byte) (Entry, error) {
 	entry := n.log.Append(uint64(n.CurrentTerm), command)
 	if n.machine != nil {
 		if err := n.machine.Apply(command); err != nil {
+			if lastIndex := n.log.LastIndex(); lastIndex >= 0 {
+				n.log.DeleteFrom(lastIndex)
+			}
 			return Entry{}, err
 		}
 	}
@@ -162,6 +166,39 @@ func (n *Node) AddCommand(command string) bool {
 	n.MatchIndex[n.id] = n.log.LastIndex()
 	n.NextIndex[n.id] = n.log.LastIndex() + 1
 	return true
+}
+
+func (n *Node) ProposeCommand(command string) (bool, int, error) {
+	if command == "" {
+		return false, -1, ErrEmptyCommand
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	if n.state.Role != Leader {
+		return false, -1, nil
+	}
+
+	entry := LogEntry{Term: uint64(n.CurrentTerm), Command: []byte(command)}
+	n.log.Append(entry)
+
+	index := n.log.LastIndex()
+	n.MatchIndex[n.id] = index
+	n.NextIndex[n.id] = index + 1
+
+	if len(n.Peers) == 0 {
+		n.CommitIndex = index
+		n.applyCommittedLocked()
+	}
+	return true, index, nil
+}
+
+func (n *Node) ReplicateNow() {
+	if n.GetState() != Leader {
+		return
+	}
+	n.broadcastAppendEntries(context.Background())
 }
 
 func (n *Node) ApplyCommittedEntries() {

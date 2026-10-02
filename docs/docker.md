@@ -1,10 +1,11 @@
 # Docker
 
-Build and run the server from the repository root:
+Build the image and run the three-node system from the repository root:
 
-```powershell
+```cmd
 docker build -t travelraft:latest .
-docker run --rm -p 8080:8080 -e NODE_ID=node1 travelraft:latest
+docker compose up -d
+docker compose ps
 ```
 
-The image uses a Go build stage and a non-root distroless runtime. The server listens on port 8080 by default and accepts `NODE_ID` and `PORT` environment variables.
+The image uses a Go build stage and a minimal scratch runtime. Compose starts one MySQL service and three TravelRaft nodes on ports `50051`, `50052`, and `50053`. Node identity and port are passed as `--id` and `--port` arguments, while database settings use `MYSQL_*` environment variables.

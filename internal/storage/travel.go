@@ -143,6 +143,13 @@ func CreateBooking(db *sql.DB, pnr string, userID, vehicleID, seatID int, passen
 	}
 	defer tx.Rollback()
 
+	var existingPNR string
+	if err := tx.QueryRow(`SELECT pnr FROM bookings WHERE pnr = ?`, pnr).Scan(&existingPNR); err == nil {
+		return tx.Commit()
+	} else if err != sql.ErrNoRows {
+		return err
+	}
+
 	result, err := tx.Exec(`UPDATE seats SET status = 'BOOKED' WHERE id = ? AND vehicle_id = ? AND status = 'AVAILABLE'`, seatID, vehicleID)
 	if err != nil {
 		return err
@@ -199,7 +206,7 @@ func CancelBooking(db *sql.DB, pnr string) error {
 		return err
 	}
 	if status == "CANCELLED" {
-		return fmt.Errorf("booking is already cancelled")
+		return tx.Commit()
 	}
 	if _, err := tx.Exec(`UPDATE bookings SET status = 'CANCELLED' WHERE pnr = ?`, pnr); err != nil {
 		return err

@@ -1,11 +1,24 @@
-FROM golang:1.27-alpine AS build
-WORKDIR /src
-COPY go.mod go.sum ./
-COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/travelraft-server ./cmd/server
+# Build stage
+FROM golang:1.26-alpine AS builder
 
-FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/travelraft-server /travelraft-server
-EXPOSE 8080
-USER nonroot:nonroot
-ENTRYPOINT ["/travelraft-server"]
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o travelraft-server ./cmd/server
+
+# Runtime stage
+FROM scratch
+
+WORKDIR /app
+
+COPY --from=builder /app/travelraft-server .
+
+EXPOSE 50051
+EXPOSE 50052
+EXPOSE 50053
+
+CMD ["./travelraft-server"]

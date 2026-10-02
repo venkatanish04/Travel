@@ -55,17 +55,19 @@ func (n *Node) AppendEntries(_ context.Context, req *pb.AppendEntriesRequest) (*
 			return &pb.AppendEntriesResponse{Term: int32(n.CurrentTerm), MatchIndex: int32(n.log.LastIndex())}, nil
 		}
 	}
-	insertAt := int(req.GetPrevLogIndex()) + 1
-	for offset, entry := range req.GetEntries() {
-		position := insertAt + offset
-		if position < len(n.log.Entries) {
-			if n.log.Entries[position].Term != uint64(entry.GetTerm()) || string(n.log.Entries[position].Command) != entry.GetCommand() {
-				n.log.Entries = n.log.Entries[:position]
+
+	startIndex := int(req.GetPrevLogIndex()) + 1
+	for i, incoming := range req.GetEntries() {
+		targetIndex := startIndex + i
+		if targetIndex <= n.log.LastIndex() {
+			existing := n.log.Get(targetIndex)
+			if existing.Term != uint64(incoming.GetTerm()) {
+				n.log.DeleteFrom(targetIndex)
+			} else {
+				continue
 			}
 		}
-		if position >= len(n.log.Entries) {
-			n.log.Append(uint64(entry.GetTerm()), []byte(entry.GetCommand()))
-		}
+		n.log.Append(LogEntry{Term: uint64(incoming.GetTerm()), Command: []byte(incoming.GetCommand())})
 	}
 	if req.GetLeaderCommit() > int32(n.CommitIndex) {
 		lastIndex := len(n.log.Entries) - 1
@@ -77,7 +79,7 @@ func (n *Node) AppendEntries(_ context.Context, req *pb.AppendEntriesRequest) (*
 	}
 	n.applyCommittedLocked()
 	n.signalElectionReset()
-	return &pb.AppendEntriesResponse{Term: int32(n.CurrentTerm), Success: true}, nil
+	return &pb.AppendEntriesResponse{Term: int32(n.CurrentTerm), Success: true, MatchIndex: int32(n.log.LastIndex())}, nil
 }
 
 func (n *Node) broadcastAppendEntries(ctx context.Context) {
@@ -163,7 +165,9 @@ func (n *Node) applyCommittedLocked() {
 			return
 		}
 		if n.machine != nil {
-			_ = n.machine.Apply(n.log.Entries[position].Command)
+			if err := n.machine.Apply(n.log.Entries[position].Command); err != nil {
+				return
+			}
 		}
 		n.LastApplied = position
 	}

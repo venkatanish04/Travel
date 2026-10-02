@@ -27,23 +27,23 @@ go run ./cmd/server --id=node1 --port=50051
 
 Start node2 and node3 on ports `50052` and `50053` in separate terminals. The gRPC client connects to node1 with `go run ./cmd/client`.
 
-The production server uses MySQL. The legacy SQLite adapter remains available for offline package tests until MySQL is installed in the development environment.
+The production server uses MySQL. Set the `MYSQL_*` environment variables before starting the server.
 
 ## Docker
 
-```powershell
+```cmd
 docker build -t travelraft:latest .
-docker run --rm -p 8080:8080 -e NODE_ID=node1 travelraft:latest
+docker compose up -d
+docker compose ps
 ```
 
 ## Kubernetes
 
 ```powershell
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/storage.yaml
-kubectl apply -f k8s/node1.yaml -f k8s/node1-service.yaml
-kubectl apply -f k8s/node2.yaml -f k8s/node2-service.yaml
-kubectl apply -f k8s/node3.yaml -f k8s/node3-service.yaml
+minikube start --driver=docker
+minikube image build -t travelraft:latest .
+kubectl apply -f k8s/
+kubectl get pods -n travelraft
 ```
 
-The Kubernetes resources run three independently addressed nodes. Peer RPC and durable replicated-log coordination are still required before these pods provide production Raft fault tolerance; the current implementation is a single-node-capable prototype.
+The Kubernetes resources run three independently addressed nodes and one shared MySQL instance backed by a persistent volume. Raft peer RPC and replicated-log coordination are included in the application; durable Raft term/log persistence and production-grade secret management remain future hardening work.
