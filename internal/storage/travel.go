@@ -80,8 +80,30 @@ func AddVehicle(db *sql.DB, vehicleType, vehicleNumber, name, source, destinatio
 	return result.LastInsertId()
 }
 
+func GetVehicleByNumber(db *sql.DB, vehicleNumber string) (*Vehicle, error) {
+	var vehicle Vehicle
+	err := db.QueryRow(`
+		SELECT id, vehicle_type, vehicle_number, name, source, destination, departure_time
+		FROM vehicles WHERE vehicle_number = ?`, vehicleNumber).Scan(
+		&vehicle.ID, &vehicle.VehicleType, &vehicle.VehicleNumber, &vehicle.Name,
+		&vehicle.Source, &vehicle.Destination, &vehicle.DepartureTime,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &vehicle, nil
+}
+
 func AddSeat(db *sql.DB, vehicleID int64, seatNumber string) error {
 	_, err := db.Exec(`INSERT INTO seats (vehicle_id, seat_number, status) VALUES (?, ?, 'AVAILABLE')`, vehicleID, seatNumber)
+	return err
+}
+
+func AddSeatIfMissing(db *sql.DB, vehicleID int64, seatNumber string) error {
+	_, err := db.Exec(`
+		INSERT INTO seats (vehicle_id, seat_number, status)
+		VALUES (?, ?, 'AVAILABLE')
+		ON DUPLICATE KEY UPDATE vehicle_id = vehicle_id`, vehicleID, seatNumber)
 	return err
 }
 

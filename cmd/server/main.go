@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 
 	pb "travelraft/api/proto"
 	"travelraft/config"
 	"travelraft/internal/booking"
+	"travelraft/internal/httpapi"
 	"travelraft/internal/raft"
 	"travelraft/internal/state"
 	"travelraft/internal/storage"
@@ -66,13 +68,25 @@ func main() {
 	node.StartApplyLoop(context.Background())
 	defer node.Stop()
 	grpcServer := grpc.NewServer()
-	pb.RegisterBookingServiceServer(grpcServer, booking.NewGRPCServer(booking.NewDatabaseService(db), db, node))
+	bookingServer := booking.NewGRPCServer(booking.NewDatabaseService(db), db, node)
+	pb.RegisterBookingServiceServer(grpcServer, bookingServer)
 	pb.RegisterRaftServiceServer(grpcServer, raft.NewGRPCServer(node))
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer listener.Close()
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "8082"
+	}
+	httpServer := &http.Server{Addr: ":" + httpPort, Handler: httpapi.NewServer(bookingServer)}
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("HTTP API stopped: %v", err)
+		}
+	}()
+	defer httpServer.Close()
 
 	fmt.Println()
 	fmt.Println("Database: CONNECTED")

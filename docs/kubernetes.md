@@ -18,6 +18,16 @@ kubectl logs deployment/travelraft-node1 -n travelraft
 
 The manifests provide three independently addressed Raft pods, one shared MySQL deployment, and a persistent MySQL volume. The application uses Kubernetes service DNS names (`node1`, `node2`, and `node3`) when `TRAVELRAFT_ENV=kubernetes`; MySQL is reached at `mysql:3306`.
 
+Grafana is deployed in the `default` namespace by `k8s/grafana-deployment.yaml` and
+`k8s/grafana-service.yaml`. Access it locally with:
+
+```powershell
+kubectl port-forward service/grafana 3000:3000
+```
+
+Then open `http://localhost:3000`. The default Grafana credentials are `admin` /
+`admin` on the first login.
+
 Verified locally on 2026-10-02 with Minikube Kubernetes v1.37.0:
 
 - `travelraft-mysql`, `travelraft-node1`, `travelraft-node2`, and `travelraft-node3` reached `1/1 Running`.

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TravelRaft | Distributed booking</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#">
+        <span class="brand-mark">T</span>
+        <span>Travel<span>Raft</span></span>
+      </a>
+      <div class="cluster-status"><span class="status-dot"></span> Cluster healthy</div>
+    </header>
+
+    <main class="page-shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Distributed travel booking</p>
+          <h1>Plan the journey.<br /><em>Raft the rest.</em></h1>
+          <p class="hero-copy">Search connected trains and buses, register your passenger details, and book confidently with majority-based replication.</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <span class="route-line"></span>
+          <span class="route-stop stop-one"></span>
+          <span class="route-stop stop-two"></span>
+          <span class="route-stop stop-three"></span>
+          <span class="route-plane">✦</span>
+        </div>
+      </section>
+
+      <section class="search-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Find your route</p>
+            <h2>Where are you going?</h2>
+          </div>
+          <span class="step-label">01 / Search</span>
+        </div>
+        <form id="search-form" class="search-form">
+          <label>Transport
+            <select id="vehicle-type">
+              <option value="TRAIN">Train</option>
+              <option value="BUS">Bus</option>
+            </select>
+          </label>
+          <label>From
+            <input id="source" required placeholder="Origin city" />
+          </label>
+          <label>To
+            <input id="destination" required placeholder="Destination city" />
+          </label>
+          <button type="submit" class="primary-button">Search trips <span>→</span></button>
+        </form>
+      </section>
+
+      <section id="results-section" class="content-grid hidden">
+        <div>
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow">Available routes</p>
+              <h2 id="results-title">Recommended trips</h2>
+            </div>
+            <span id="result-count" class="muted"></span>
+          </div>
+          <div id="results" class="results-list"></div>
+        </div>
+        <aside class="side-panel">
+          <p class="eyebrow">Raft cluster</p>
+          <h3>Consensus at a glance</h3>
+          <div class="node-list">
+            <div><span class="node-icon">01</span><span>node1</span><b>LEADER</b></div>
+            <div><span class="node-icon">02</span><span>node2</span><b>FOLLOWER</b></div>
+            <div><span class="node-icon">03</span><span>node3</span><b>FOLLOWER</b></div>
+          </div>
+          <div class="term-row"><span>Current term</span><strong>04</strong></div>
+          <div class="term-row"><span>Replication</span><strong class="green">3 / 3</strong></div>
+        </aside>
+      </section>
+
+      <section class="lookup-card">
+        <div>
+          <p class="eyebrow">Already booked?</p>
+          <h2>Manage your booking</h2>
+        </div>
+        <form id="lookup-form" class="lookup-form">
+          <input id="pnr-input" placeholder="Enter PNR, e.g. TRF123456789" />
+          <button class="secondary-button" type="submit">Find booking</button>
+        </form>
+        <div id="booking-result" class="booking-result hidden"></div>
+      </section>
+
+      <section class="register-card">
+        <div>
+          <p class="eyebrow">Passenger registration</p>
+          <h2>Save your details</h2>
+          <p class="muted">Register once so your next booking is faster.</p>
+        </div>
+        <form id="registration-form" class="registration-form">
+          <label>Full name<input id="registration-name" required placeholder="Your full name" /></label>
+          <label>Email<input id="registration-email" required type="email" placeholder="you@example.com" /></label>
+          <button class="secondary-button" type="submit">Register passenger</button>
+        </form>
+        <div id="registration-result" class="booking-result hidden"></div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status"></div>
+    <dialog id="booking-dialog">
+      <button class="dialog-close" id="close-dialog" aria-label="Close">×</button>
+      <p class="eyebrow">02 / Confirm booking</p>
+      <h2 id="dialog-title">Choose a seat</h2>
+      <div id="seat-grid" class="seat-grid"></div>
+      <form id="booking-form">
+        <input id="selected-seat" type="hidden" />
+        <label>Passenger name<input id="passenger-name" required placeholder="Full name" /></label>
+        <label>Email<input id="passenger-email" required type="email" placeholder="you@example.com" /></label>
+        <button class="primary-button" type="submit">Confirm booking <span>→</span></button>
+      </form>
+    </dialog>
+    <script src="app.js"></script>
+  </body>
+</html>
